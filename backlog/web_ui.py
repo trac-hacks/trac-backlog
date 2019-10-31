@@ -38,18 +38,20 @@ class BacklogPlugin(Component):
     def environment_created(self):
         connector, args = DatabaseManager(self.env)._get_connector()
         to_sql = connector.to_sql
-        db = self.env.get_db_cnx()
-        cur = db.cursor()
+        with self.env.db_transaction as db:
 
-        for table in schema:
-            sql = to_sql(table)
-            for stmt in sql:
-                cur.execute(stmt)
+            cur = db.cursor()
 
-        # Insert version information
-        cur.execute("INSERT INTO system (name,value) "
-                    "VALUES ('backlog_schema_version', %s)" % (
-                        str(schema_version)))
+            for table in schema:
+                sql = to_sql(table)
+                for stmt in sql:
+                    cur.execute(stmt)
+
+            # Insert version information
+            cur.execute("""
+                INSERT INTO system (name,value) 
+                VALUES ('backlog_schema_version', %s)
+                """, (str(schema_version),))
 
     def environment_needs_upgrade(self, db):
         cur = db.cursor()
@@ -140,39 +142,39 @@ class BacklogPlugin(Component):
 
     # ITicketChangeListener
     def ticket_created(self, ticket):
-        db = self.env.get_db_cnx()
-        cursor = db.cursor()
-        cursor.execute("BEGIN")
+        with self.env.db_transaction as db:
+            cursor = db.cursor()
+            cursor.execute("BEGIN")
 
-        try:
-            cursor.execute("SELECT MAX(rank) FROM backlog")
-            rank = cursor.fetchone()[0]
-            if rank is None:
-                rank = 1
-            else:
-                rank += 1
+            try:
+                cursor.execute("SELECT MAX(rank) FROM backlog")
+                rank = cursor.fetchone()[0]
+                if rank is None:
+                    rank = 1
+                else:
+                    rank += 1
 
-            cursor.execute("INSERT INTO backlog VALUES (%s, %s)",
-                           (ticket.id, rank))
-            db.commit()
-        except:
-            db.rollback()
-            raise
+                cursor.execute("INSERT INTO backlog VALUES (%s, %s)",
+                               (ticket.id, rank))
+                db.commit()
+            except:
+                db.rollback()
+                raise
 
     def ticket_changed(self, ticket, comment, author, old_values):
         pass
 
     def ticket_deleted(self, ticket):
-        db = self.env.get_db_cnx()
-        cursor = db.cursor()
+        with self.env.db_transaction as db:
+            cursor = db.cursor()
 
-        try:
-            cursor.execute("DELETE FROM backlog WHERE ticket_id = %s",
-                           (ticket.id,))
-            db.commit()
-        except:
-            db.rollback()
-            raise
+            try:
+                cursor.execute("DELETE FROM backlog WHERE ticket_id = %s",
+                               (ticket.id,))
+                db.commit()
+            except:
+                db.rollback()
+                raise
 
     # IRequestHandler methods
     def match_request(self, req):
@@ -229,35 +231,35 @@ class BacklogPlugin(Component):
 
 
     def _get_active_tickets(self, milestone = None):
-        db = self.env.get_db_cnx()
-        cursor = db.cursor()
+        with self.env.db_transaction as db:
+            cursor = db.cursor()
 
-        try:
-            if milestone is None:
-                # Need a separate unscheduled backlog query since deleting a
-                # milestone and re-targeting a ticket can set the milestone field
-                # to null, instead of the empty string.
-                UNSCHEDULED_BACKLOG_QUERY = '''SELECT id FROM ticket t
-                  LEFT JOIN enum p ON p.name = t.priority AND
-                    p.type = 'priority'
-                  LEFT JOIN backlog bp ON bp.ticket_id = t.id
-                  WHERE status <> 'closed' AND
-                    (milestone = '' or milestone is null)
-                  ORDER BY bp.rank, %s, t.type, time
-                ''' % db.cast('p.value', 'int')
-                cursor.execute(UNSCHEDULED_BACKLOG_QUERY)
-            else:
-                BACKLOG_QUERY = '''SELECT id FROM ticket t
-                  LEFT JOIN enum p ON p.name = t.priority AND
-                    p.type = 'priority'
-                  LEFT JOIN backlog bp ON bp.ticket_id = t.id
-                  WHERE status <> 'closed' AND milestone = %%s
-                  ORDER BY bp.rank, %s, t.type, time
-                ''' % db.cast('p.value', 'int')
-                cursor.execute(BACKLOG_QUERY, (milestone,))
-        except:
-            db.rollback()
-            raise
+            try:
+                if milestone is None:
+                    # Need a separate unscheduled backlog query since deleting a
+                    # milestone and re-targeting a ticket can set the milestone field
+                    # to null, instead of the empty string.
+                    UNSCHEDULED_BACKLOG_QUERY = '''SELECT id FROM ticket t
+                      LEFT JOIN enum p ON p.name = t.priority AND
+                        p.type = 'priority'
+                      LEFT JOIN backlog bp ON bp.ticket_id = t.id
+                      WHERE status <> 'closed' AND
+                        (milestone = '' or milestone is null)
+                      ORDER BY bp.rank, %s, t.type, time
+                    ''' % db.cast('p.value', 'int')
+                    cursor.execute(UNSCHEDULED_BACKLOG_QUERY)
+                else:
+                    BACKLOG_QUERY = '''SELECT id FROM ticket t
+                      LEFT JOIN enum p ON p.name = t.priority AND
+                        p.type = 'priority'
+                      LEFT JOIN backlog bp ON bp.ticket_id = t.id
+                      WHERE status <> 'closed' AND milestone = %%s
+                      ORDER BY bp.rank, %s, t.type, time
+                    ''' % db.cast('p.value', 'int')
+                    cursor.execute(BACKLOG_QUERY, (milestone,))
+            except:
+                db.rollback()
+                raise
 
         tickets = []
 
@@ -276,39 +278,41 @@ class BacklogPlugin(Component):
 
         to_result = {}
 
-        db = self.env.get_db_cnx()
+        with self.env.db_transaction as db:
 
-        try:
-            cursor = db.cursor()
+            try:
+                cursor = db.cursor()
 
-            cursor.execute('SELECT rank FROM backlog WHERE ticket_id = %s',
-                           (ticket_id,))
-            old_rank = cursor.fetchone()[0]
+                cursor.execute('SELECT rank FROM backlog WHERE ticket_id = %s',
+                               (ticket_id,))
+                old_rank = cursor.fetchone()[0]
 
-            cursor.execute('SELECT rank FROM backlog WHERE ticket_id = %s',
-                           (before_ticket_id,))
-            new_rank = cursor.fetchone()[0]
+                cursor.execute('SELECT rank FROM backlog WHERE ticket_id = %s',
+                               (before_ticket_id,))
+                new_rank = cursor.fetchone()[0]
 
-            if new_rank > old_rank:
+                if new_rank > old_rank:
+                    cursor.execute("""
+                        UPDATE backlog SET rank = rank - 1
+                        WHERE rank > %s AND rank < %s
+                        """, (old_rank, new_rank))
+                    new_rank -= 1
+                else:
+                    cursor.execute("""
+                        UPDATE backlog SET rank = rank + 1 
+                        WHERE rank >= %s AND rank < %s
+                        """, (new_rank, old_rank))
+
                 cursor.execute(
-                    'UPDATE backlog SET rank = rank - 1 WHERE rank > %s AND rank < %s',
-                    (old_rank, new_rank))
-                new_rank -= 1
-            else:
-                cursor.execute(
-                    'UPDATE backlog SET rank = rank + 1 WHERE rank >= %s AND rank < %s',
-                    (new_rank, old_rank))
+                    'UPDATE backlog SET rank = %s WHERE ticket_id = %s',
+                    (new_rank, ticket_id))
 
-            cursor.execute(
-                'UPDATE backlog SET rank = %s WHERE ticket_id = %s',
-                (new_rank, ticket_id))
-
-            db.commit()
-        except:
-            db.rollback()
-            to_result['msg'] = 'Error trying to update rank'
-            import traceback
-            print traceback.print_exc()
+                db.commit()
+            except:
+                db.rollback()
+                to_result['msg'] = 'Error trying to update rank'
+                import traceback
+                print traceback.print_exc()
 
         data = simplejson.dumps(to_result)
 
@@ -328,38 +332,40 @@ class BacklogPlugin(Component):
 
         to_result = {}
 
-        db = self.env.get_db_cnx()
+        with self.env.db_query as db:
 
-        try:
-            cursor = db.cursor()
+            try:
+                cursor = db.cursor()
 
-            cursor.execute('SELECT rank FROM backlog WHERE ticket_id = %s',
-                           (ticket_id,))
-            old_rank = cursor.fetchone()[0]
+                cursor.execute('SELECT rank FROM backlog WHERE ticket_id = %s',
+                               (ticket_id,))
+                old_rank = cursor.fetchone()[0]
 
-            cursor.execute('SELECT rank FROM backlog WHERE ticket_id = %s',
-                           (after_ticket_id,))
-            new_rank = cursor.fetchone()[0]
+                cursor.execute('SELECT rank FROM backlog WHERE ticket_id = %s',
+                               (after_ticket_id,))
+                new_rank = cursor.fetchone()[0]
 
-            if old_rank < new_rank:
+                if old_rank < new_rank:
+                    cursor.execute("""
+                       UPDATE backlog SET rank = rank - 1 
+                       WHERE rank > %s AND rank <= %s
+                       """, (old_rank, new_rank))
+                elif old_rank >= new_rank:
+                    cursor.execute("""
+                        UPDATE backlog SET rank = rank + 1 
+                        WHERE rank > %s AND rank <= %s
+                        """, (new_rank, old_rank))
+                    new_rank += 1
+
                 cursor.execute(
-                    'UPDATE backlog SET rank = rank - 1 WHERE rank > %s AND rank <= %s',
-                    (old_rank, new_rank))
-            elif old_rank >= new_rank:
-                cursor.execute(
-                    'UPDATE backlog SET rank = rank + 1 WHERE rank > %s AND rank <= %s',
-                    (new_rank, old_rank))
-                new_rank += 1
+                    'UPDATE backlog SET rank = %s WHERE ticket_id = %s',
+                    (new_rank, ticket_id))
 
-            cursor.execute(
-                'UPDATE backlog SET rank = %s WHERE ticket_id = %s',
-                (new_rank, ticket_id))
-
-            db.commit()
-        except:
-            db.rollback()
-            to_result['msg'] = 'Error trying to update rank'
-            raise
+                db.commit()
+            except:
+                db.rollback()
+                to_result['msg'] = 'Error trying to update rank'
+                raise
 
         self._get_active_tickets()
 
@@ -385,33 +391,34 @@ class BacklogPlugin(Component):
         '''Retrieve a list of milestones.  If exclude is specified, it
         will exclude that milestone from the list and add in the unscheduled
         milestone.'''
-        db = self.env.get_db_cnx()
+        
+        with self.env.db_query as db:
+            cursor = db.cursor()
+            results = []
 
-        cursor = db.cursor()
+            if exclude:
+                num_tickets = self._get_num_tickets(cursor, '')
+                results.append(
+                    dict(name='(unscheduled)',
+                         due='--',
+                         num_tickets=num_tickets))
 
-        results = []
+            cursor.execute('''SELECT name, due FROM milestone
+                WHERE completed = 0
+                ORDER BY (due = 0), due, UPPER(name), name''')
 
-        if exclude:
-            num_tickets = self._get_num_tickets(cursor, '')
-            results.append(
-                dict(name='(unscheduled)', due='--', num_tickets=num_tickets))
+            rows = cursor.fetchall()
 
-        cursor.execute('''SELECT name, due FROM milestone
-            WHERE completed = 0
-            ORDER BY (due = 0), due, UPPER(name), name''')
+            for row in rows:
+                if exclude and exclude == row[0]:
+                    continue
 
-        rows = cursor.fetchall()
+                num_tickets = self._get_num_tickets(cursor, row[0])
 
-        for row in rows:
-            if exclude and exclude == row[0]:
-                continue
-
-            num_tickets = self._get_num_tickets(cursor, row[0])
-
-            d = dict(name=row[0],
-                     due=(row[1] and format_date(row[1])) or '--',
-                     num_tickets=num_tickets)
-            results.append(d)
+                d = dict(name=row[0],
+                         due=(row[1] and format_date(row[1])) or '--',
+                         num_tickets=num_tickets)
+                results.append(d)
 
         return results
 
@@ -432,17 +439,16 @@ class BacklogPlugin(Component):
             to_result['msg'] = "Couldn't find ticket!"
 
         if ticket:
-            db = self.env.get_db_cnx()
+            with self.env.db_query as db:
+                cursor = db.cursor()
 
-            cursor = db.cursor()
-
-            try:
-                ticket['milestone'] = milestone
-                ticket.save_changes(author, "");
-
-                to_result['num_tickets'] = self._get_num_tickets(cursor, milestone)
-            except:
-                to_result['msg'] = "Unable to assign milestone"
+                try:
+                    ticket['milestone'] = milestone
+                    ticket.save_changes(author, "");
+                    to_result['num_tickets'] = self._get_num_tickets(cursor,
+                                                                     milestone)
+                except:
+                    to_result['msg'] = "Unable to assign milestone"
 
         data = simplejson.dumps(to_result)
 

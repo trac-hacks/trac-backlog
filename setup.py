@@ -38,9 +38,11 @@ setup(
     ],
     author = "John Szakmeister",
     author_email = "john@szakmeister.net",
+    maintainer = "Theodor Norup",
+    maintainer_email = "theodor.norup@gmail.com",
     description = "Enables Trac to be used for managing your ticket backlog.",
     long_description = long_description,
-    url = "https://github.com/jszakmeister/trac-backlog",
+    url = "https://github.com/trac-hacks/trac-backlog",
     license = "BSD",
     classifiers = [
         'Development Status :: 4 - Beta',
