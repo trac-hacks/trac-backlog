@@ -332,7 +332,7 @@ class BacklogPlugin(Component):
 
         to_result = {}
 
-        with self.env.db_query as db:
+        with self.env.db_transaction as db:
 
             try:
                 cursor = db.cursor()
