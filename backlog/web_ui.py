@@ -214,10 +214,12 @@ class BacklogPlugin(Component):
         class Report(object):
             def __init__(self):
                 self.id = -1
-
+                
+        tf = req.session.get('lc_time', 'iso8601') 
         data['tickets'] = self._get_active_tickets(milestone)
         data['form_token'] = req.form_token
-        data['active_milestones'] = self._get_active_milestones(milestone)
+        data['active_milestones'] = self._get_active_milestones(milestone,
+                                                                time_format=tf)
         data['base_path'] = req.base_path
         data['shown_fields'] = req.session.get('backlog_fields') or self._ticket_fields
 
@@ -387,7 +389,7 @@ class BacklogPlugin(Component):
                 "AND milestone = %s", (milestone,));
         return cursor.fetchone()[0]
 
-    def _get_active_milestones(self, exclude = None):
+    def _get_active_milestones(self, exclude = None, time_format=None):
         '''Retrieve a list of milestones.  If exclude is specified, it
         will exclude that milestone from the list and add in the unscheduled
         milestone.'''
@@ -414,9 +416,10 @@ class BacklogPlugin(Component):
                     continue
 
                 num_tickets = self._get_num_tickets(cursor, row[0])
-
+                #print req.session
                 d = dict(name=row[0],
-                         due=(row[1] and format_date(row[1])) or '--',
+                         due=(row[1] and format_date(row[1], format=time_format)) or '--',
+                         #due=(row[1] and format_date(row[1])) or '--',
                          num_tickets=num_tickets)
                 results.append(d)
 
