@@ -11,7 +11,7 @@ from trac.core import *
 from trac.db import DatabaseManager
 from trac.env import IEnvironmentSetupParticipant
 from trac.perm import IPermissionRequestor
-from trac.ticket.api import ITicketChangeListener
+from trac.ticket.api import ITicketChangeListener, TicketSystem
 from trac.ticket.model import Ticket
 from trac.web.chrome import INavigationContributor, ITemplateProvider
 from trac.web.chrome import add_stylesheet
@@ -29,11 +29,11 @@ class BacklogPlugin(Component):
                IEnvironmentSetupParticipant, ITemplateProvider,
                ITicketChangeListener, IPermissionRequestor)
 
-    _ticket_fields = [ 
-        'id', 'summary', 'component', 'version', 'type', 'owner', 'status', 
-        'time_created'
+    _ticket_fields = [
+        u'id', u'summary', u'component', u'version', u'type',
+        u'owner', u'status', u'time_created'
     ]
-
+    
     # IEnvironmentSetupParticipant
     def environment_created(self):
         connector, args = DatabaseManager(self.env)._get_connector()
@@ -185,6 +185,14 @@ class BacklogPlugin(Component):
         return False
 
     def process_request(self, req):
+
+        tf = req.session.get('lc_time', 'iso8601')
+
+        def _formatter(value, field_type):
+            print '+++ formatter', value, field_type #, format_date(value, tf)
+            if field_type == 'time':
+                return format_date(value, tf)
+            return value
         
         req.perm.require('TICKET_VIEW')
         if req.method == 'POST':
@@ -209,19 +217,37 @@ class BacklogPlugin(Component):
 
         data = {
             'title': (milestone or "Unscheduled"),
+            'formatter' : _formatter,
         }
 
-        class Report(object):
-            def __init__(self):
-                self.id = -1
+#        class Report(object):
+#            def __init__(self):
+#               self.id = -1
                 
-        tf = req.session.get('lc_time', 'iso8601') 
+        
+        all_custom_fields =  TicketSystem(self.env).get_custom_fields()
+        all_shown_fields = req.session.get('backlog_fields') \
+                               or self._ticket_fields
+        
         data['tickets'] = self._get_active_tickets(milestone)
         data['form_token'] = req.form_token
         data['active_milestones'] = self._get_active_milestones(milestone,
                                                                 time_format=tf)
         data['base_path'] = req.base_path
-        data['shown_fields'] = req.session.get('backlog_fields') or self._ticket_fields
+        data['custom_field_labels'] = { \
+            cf["name"] : cf["label"] for cf in all_custom_fields
+        }
+        data['custom_field_types'] = { \
+            cf['name'] : cf['type'] for cf in all_custom_fields
+        }
+        data['custom_fields_shown'] = [ \
+            cf['name'] for cf in all_custom_fields \
+                         if (cf['name'] in all_shown_fields)
+        ]
+        print all_shown_fields, data['custom_fields_shown'], data['custom_field_types']
+        for t in data['tickets']:
+            print t.id, t['time_field']
+        data['shown_fields'] = all_shown_fields
 
         if 'BACKLOG_ADMIN' in req.perm:
             data['allow_sorting'] = True
@@ -416,7 +442,7 @@ class BacklogPlugin(Component):
                     continue
 
                 num_tickets = self._get_num_tickets(cursor, row[0])
-                #print req.session
+
                 d = dict(name=row[0],
                          due=(row[1] and format_date(row[1], format=time_format)) or '--',
                          #due=(row[1] and format_date(row[1])) or '--',
