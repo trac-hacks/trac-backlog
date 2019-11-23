@@ -189,7 +189,6 @@ class BacklogPlugin(Component):
         tf = req.session.get('lc_time', 'iso8601')
 
         def _formatter(value, field_type):
-            print '+++ formatter', value, field_type #, format_date(value, tf)
             if field_type == 'time':
                 return format_date(value, tf)
             return value
@@ -209,22 +208,15 @@ class BacklogPlugin(Component):
 
         if req.path_info.startswith('/backlog/milestone/'):
             milestone = req.path_info[19:]
+            req.session['backlog_milestone'] = milestone
         else:
-            milestone = None
-
-        if milestone == '(unscheduled)':
-            milestone = None
+            milestone = req.session.get('backlog_milestone') or None
 
         data = {
             'title': (milestone or "Unscheduled"),
             'formatter' : _formatter,
         }
 
-#        class Report(object):
-#            def __init__(self):
-#               self.id = -1
-                
-        
         all_custom_fields =  TicketSystem(self.env).get_custom_fields()
         all_shown_fields = req.session.get('backlog_fields') \
                                or self._ticket_fields
@@ -244,9 +236,7 @@ class BacklogPlugin(Component):
             cf['name'] for cf in all_custom_fields \
                          if (cf['name'] in all_shown_fields)
         ]
-        print all_shown_fields, data['custom_fields_shown'], data['custom_field_types']
-        for t in data['tickets']:
-            print t.id, t['time_field']
+        
         data['shown_fields'] = all_shown_fields
 
         if 'BACKLOG_ADMIN' in req.perm:

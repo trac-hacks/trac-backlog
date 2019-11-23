@@ -270,12 +270,12 @@
         </div>
         <div class="milestone_list">
             <div py:for="milestone in active_milestones" id="${milestone_id(milestone.name)}" class="milestone">
-                <h4><a href="${base_path}/backlog" py:if="milestone.name == '(unscheduled)'">${milestone.name}</a>
-                    <a href="${base_path}/backlog/milestone/${milestone.name}" py:if="milestone.name != '(unscheduled)'">${milestone.name}</a></h4>
-                <table>
-                  <tr><td>Due:</td><td>${milestone.due}</td></tr>
-                  <tr><td>Tickets:</td><td class="num_tickets">${milestone.num_tickets}</td></tr>
-                </table>
+              <h4><a href="${base_path}/backlog/milestone/${milestone.name}">${milestone.name}</a>
+	      </h4>
+              <table>
+                <tr><td>Due:</td><td>${milestone.due}</td></tr>
+                <tr><td>Tickets:</td><td class="num_tickets">${milestone.num_tickets}</td></tr>
+              </table>
             </div>
         </div>
       </div>
