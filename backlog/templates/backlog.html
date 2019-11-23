@@ -248,6 +248,7 @@
                         <th py:if="'owner' in shown_fields">Owner</th>
                         <th py:if="'status' in shown_fields">Status</th>
                         <th py:if="'time_created' in shown_fields">Created</th>
+			<th py:for="cf in custom_fields_shown">${custom_field_labels[cf]}</th>
                     </tr>
                 </thead>
                 <tbody id="tickets">
@@ -260,18 +261,21 @@
                         <td py:if="'owner' in shown_fields">$ticket.owner</td>
                         <td py:if="'status' in shown_fields">$ticket.status</td>
                         <td py:if="'time_created' in shown_fields">${format_date(ticket.time_created)}</td>
+			<py:for each="cf in custom_fields_shown">
+                            <td>${formatter(ticket[cf],custom_field_types[cf])}</td>
+			</py:for>
                     </tr>
                 </tbody>
             </table>
         </div>
         <div class="milestone_list">
             <div py:for="milestone in active_milestones" id="${milestone_id(milestone.name)}" class="milestone">
-                <h4><a href="${base_path}/backlog" py:if="milestone.name == '(unscheduled)'">${milestone.name}</a>
-                    <a href="${base_path}/backlog/milestone/${milestone.name}" py:if="milestone.name != '(unscheduled)'">${milestone.name}</a></h4>
-                <table>
-                  <tr><td>Due:</td><td>${milestone.due}</td></tr>
-                  <tr><td>Tickets:</td><td class="num_tickets">${milestone.num_tickets}</td></tr>
-                </table>
+              <h4><a href="${base_path}/backlog/milestone/${milestone.name}">${milestone.name}</a>
+	      </h4>
+              <table>
+                <tr><td>Due:</td><td>${milestone.due}</td></tr>
+                <tr><td>Tickets:</td><td class="num_tickets">${milestone.num_tickets}</td></tr>
+              </table>
             </div>
         </div>
       </div>
