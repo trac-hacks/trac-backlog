@@ -27,7 +27,12 @@ tickets, and you may want to consider pulling them all into the unscheduled
 backlog when you do that (so that you can order the all the tickets against
 each other).
 
+The Backlog window is "sticky" wrt. the displayed backlog milestone in the sense that it will display the milestone last visited (or the unscheduled backlog if none has been visited in the current session). 
 
+Preferences
+-----------
+
+The backlog window can show any ticket fields including custom fields. This is configured per session through the Backlog preferences tab. On Trac 1.2.x, date fields are formatted according to the session's locale (1.0.x is lacking field type information for date fields) 
 Dependencies
 ------------
 
@@ -64,7 +69,7 @@ Bugs/Feature Requests
 ---------------------
 
 Please use the
-`GitHub site <https://github.com/jszakmeister/trac-backlog/issues>`_ to file any
+`GitHub site <https://github.com/trac-hacks/trac-backlog/issues>`_ to file any
 bug and feature requests.
 
 
@@ -72,7 +77,7 @@ Source
 ------
 
 The plugin is maintained on
-`GitHub <https://github.com/jszakmeister/trac-backlog>`_.
+`GitHub <https://github.com/trac-hacks/trac-backlog>`_.
 
 
 Other Solutions
