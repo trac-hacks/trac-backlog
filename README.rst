@@ -33,6 +33,8 @@ Preferences
 -----------
 
 The backlog window can show any ticket fields including custom fields. This is configured per session through the Backlog preferences tab. On Trac 1.2.x, date fields are formatted according to the session's locale (1.0.x is lacking field type information for date fields) 
+
+
 Dependencies
 ------------
 
